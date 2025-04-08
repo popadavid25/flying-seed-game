@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.2/p5.min.js"></script>
+</head>
+<body>
+<script>
+let bird;
+let pipes = [];
+let gravity = 0.6;
+let lift = -10;
+let velocity = 0;
+let score = 0;
+let gameState = "start"; // Game state: "start", "playing", or "gameOver"
+
+// Background elements (static)
+let clouds = [];
+let floorOffset = 0;
+
+function setup() {
+  createCanvas(400, 600);
+  noSmooth(); // Ensure crisp rendering
+
+  // Initialize bird and pipes
+  bird = new Bird();
+  pipes = [new Pipe()];
+  textSize(30); // Default text size for the score
+  textAlign(CENTER, TOP); // Default alignment for the score
+  textStyle(BOLD); // Default style for the score
+
+  // Generate static clouds
+  clouds.push({ x: 60, y: 130 });
+  clouds.push({ x: 220, y: 190 });
+  clouds.push({ x: 340, y: 160 });
+}
+
+function draw() {
+  // Draw static sunset beach-themed background (always visible)
+  // Gradient sky (warm orange to soft purple)
+  for (let y = 0; y < height - 32; y += 10) {
+    let t = map(y, 0, height - 32, 0, 1);
+    let r = lerp(255, 200, t);
+    let g = lerp(180, 150, t);
+    let b = lerp(120, 200, t);
+    fill(r, g, b);
+    noStroke();
+    rect(0, y, width, 10);
+  }
+
+  // Draw setting sun higher and to the left
+  fill(255, 150, 80); // Warm orange
+  stroke(255, 220, 100); // Glowing yellow outline
+  strokeWeight(3);
+  ellipse(150, 150, 60, 60); // Sun at x = 150, y = 150
+  noStroke();
+
+  // Draw static clouds with sunset tint
+  clouds.forEach(cloud => {
+    // Main cloud body
+    fill(255, 200, 200); // Soft pink
+    beginShape();
+    vertex(cloud.x, cloud.y);
+    vertex(cloud.x + 15, cloud.y - 20);
+    vertex(cloud.x + 30, cloud.y - 25);
+    vertex(cloud.x + 45, cloud.y - 20);
+    vertex(cloud.x + 60, cloud.y);
+    vertex(cloud.x + 50, cloud.y + 15);
+    vertex(cloud.x + 30, cloud.y + 20);
+    vertex(cloud.x + 10, cloud.y + 15);
+    endShape(CLOSE);
+    // Shading on the bottom
+    fill(255, 180, 150, 150); // Light orange with transparency
+    beginShape();
+    vertex(cloud.x + 10, cloud.y + 15);
+    vertex(cloud.x + 30, cloud.y + 20);
+    vertex(cloud.x + 50, cloud.y + 15);
+    vertex(cloud.x + 60, cloud.y);
+    vertex(cloud.x + 30, cloud.y + 5);
+    endShape(CLOSE);
+  });
+
+  // Draw ocean layer above the bricks
+  fill(50, 100, 150); // Deep blue
+  rect(0, 500, width, 68); // From y = 500 to y = 568 (brick floor)
+  // Add a reflection effect
+  for (let y = 500; y < 568; y += 5) {
+    let t = map(y, 500, 568, 0, 1);
+    fill(80, 130, 180, 255 - t * 150); // Lighter blue with fading transparency
+    rect(0, y, width, 5);
+  }
+  // Add subtle wave lines
+  stroke(80, 130, 180);
+  strokeWeight(1);
+  for (let y = 510; y < 560; y += 10) {
+    for (let x = 0; x < width; x += 20) {
+      line(x, y, x + 10, y);
+    }
+  }
+  noStroke();
+
+  // Update floor offset (move with pipes, but only if playing)
+  let pipeSpeed = 2;
+  if (gameState === "playing") {
+    floorOffset -= pipeSpeed;
+  }
+  let brickWidth = 16;
+  if (floorOffset <= -brickWidth) {
+    floorOffset += brickWidth;
+  }
+
+  // Draw brick floor (32 pixels tall, moving with pipes)
+  let floorHeight = 32;
+  let brickHeight = 8;
+  for (let x = floorOffset - brickWidth; x < width + brickWidth; x += brickWidth) {
+    for (let y = height - floorHeight; y < height; y += brickHeight) {
+      let offset = (Math.floor((y - (height - floorHeight)) / brickHeight) % 2 === 0) ? 0 : brickWidth / 2;
+      let brickX = x + offset;
+      fill(180, 80, 60); // Reddish-brown
+      rect(brickX, y, brickWidth, brickHeight);
+      stroke(120, 50, 40); // Darker shade
+      strokeWeight(1);
+      rect(brickX, y, brickWidth, brickHeight);
+      noStroke();
+    }
+  }
+
+  // Handle different game states
+  if (gameState === "start") {
+    // Display start screen
+    fill(147, 208, 207); // Superseed Light Green (same as bird)
+    stroke(0); // Black outline
+    strokeWeight(2); // Outline thickness
+    textSize(40);
+    textAlign(CENTER, CENTER);
+    textStyle(BOLD);
+    text("FLYING SEED*", width / 2, height / 2 - 20); // Centered, slightly above middle
+    noStroke(); // Remove stroke for subsequent text
+    fill(0); // Black for "Press Space to Start" for contrast
+    textSize(20);
+    text("Press Space to Start", width / 2, height / 2 + 20); // Below "FLYING SEED*"
+    // Reset text settings for other states
+    textSize(30);
+    textAlign(CENTER, TOP);
+    textStyle(BOLD);
+  } else if (gameState === "playing") {
+    // Game elements (normal gameplay)
+    bird.update();
+    for (let i = pipes.length - 1; i >= 0; i--) {
+      pipes[i].update();
+      pipes[i].show();
+      if (pipes[i].hits(bird)) {
+        gameState = "gameOver";
+      }
+      if (pipes[i].passes(bird) && !pipes[i].counted) {
+        score += 1;
+        pipes[i].counted = true;
+      }
+      if (pipes[i].offscreen()) {
+        pipes.splice(i, 1);
+      }
+    }
+    if (frameCount % 100 === 0) {
+      pipes.push(new Pipe());
+    }
+
+    bird.show();
+    for (let pipe of pipes) {
+      pipe.show();
+    }
+
+    // Display the score (only the number) at the top middle
+    fill(0);
+    text(score, width / 2, 10);
+  } else if (gameState === "gameOver") {
+    // Game over screen
+    bird.show(); // Keep the bird visible
+    for (let pipe of pipes) {
+      pipe.show(); // Keep pipes visible
+    }
+    fill(255, 0, 0);
+    textSize(40);
+    textAlign(CENTER, CENTER);
+    text("Game Over!", width / 2, height / 2);
+    textSize(20);
+    text("Press Space to Restart", width / 2, height / 2 + 40);
+    // Reset text settings for other states
+    textSize(30);
+    textAlign(CENTER, TOP);
+    textStyle(BOLD);
+  }
+}
+
+function keyPressed() {
+  if (key === ' ') {
+    if (gameState === "start") {
+      // Start the game
+      gameState = "playing";
+      bird = new Bird(); // Reset bird position
+      pipes = [new Pipe()]; // Reset pipes
+      score = 0; // Reset score
+      velocity = 0; // Reset velocity
+      frameCount = 0; // Reset frameCount for pipe spawning
+    } else if (gameState === "playing") {
+      bird.flap();
+    } else if (gameState === "gameOver") {
+      // Restart by going back to start screen
+      gameState = "start";
+      bird = new Bird();
+      pipes = [new Pipe()];
+      score = 0;
+      velocity = 0;
+      frameCount = 0;
+    }
+  }
+}
+
+class Bird {
+  constructor() {
+    this.y = height / 2;
+    this.x = 64;
+    this.size = 32;
+  }
+
+  update() {
+    velocity += gravity;
+    this.y += velocity;
+    if (this.y + this.size / 2 > height - 32) {
+      this.y = height - 32 - this.size / 2;
+      velocity = 0;
+    }
+    if (this.y - this.size / 2 < 0) {
+      this.y = this.size / 2;
+      velocity = 0;
+    }
+  }
+
+  show() {
+    push();
+    translate(this.x, this.y);
+    // Draw the seed-shaped bird using Superseed's colors
+    fill(147, 208, 207); // Superseed Light Green
+    stroke(14, 39, 59); // Tangaroa
+    strokeWeight(2);
+    beginShape();
+    vertex(-this.size / 2, 0);
+    bezierVertex(-this.size / 2, -this.size * 0.6, -this.size / 4, -this.size * 0.6, 0, -this.size * 0.6);
+    bezierVertex(this.size / 4, -this.size * 0.6, this.size / 2, -this.size * 0.3, this.size / 2, 0);
+    bezierVertex(this.size / 2, this.size * 0.3, this.size / 4, this.size * 0.6, 0, this.size * 0.6);
+    bezierVertex(-this.size / 4, this.size * 0.6, -this.size / 2, this.size * 0.6, -this.size / 2, 0);
+    endShape(CLOSE);
+
+    // Draw the "X" and horizontal line with a thinner stroke
+    stroke(14, 39, 59); // Tangaroa, to match the outline
+    strokeWeight(1); // Thinner than the outline
+    // Top-left to bottom-right
+    line(-this.size * 0.2, -this.size * 0.24, this.size * 0.2, this.size * 0.24);
+    // Bottom-left to top-right
+    line(-this.size * 0.2, this.size * 0.24, this.size * 0.2, -this.size * 0.24);
+    // Horizontal line through the middle of the "X", made a little longer
+    line(-this.size * 0.28, 0, this.size * 0.28, 0); // Extended from ±0.2 to ±0.28
+    // Add a small dot in the middle
+    noStroke();
+    fill(14, 39, 59); // Tangaroa, to match the "X" and line
+    ellipse(0, 0, 3, 3); // 3-pixel diameter dot at the center
+    pop();
+  }
+
+  flap() {
+    velocity = lift;
+  }
+}
+
+class Pipe {
+  constructor() {
+    this.spacing = 200;
+    this.top = random(height / 8, 2 / 3 * (height - 32));
+    this.bottom = (height - 32) - (this.top + this.spacing);
+    this.x = width;
+    this.w = 50;
+    this.speed = 2;
+    this.counted = false;
+    // Log the top and bottom edges of the bottom pipe for debugging
+    console.log(`New Pipe - Top: ${this.top}, Bottom Height: ${this.bottom}, Bottom Pipe Top Y: ${568 - this.bottom}, Bottom Pipe Bottom Y: ${568 - this.bottom + this.bottom}`);
+  }
+
+  show() {
+    push();
+    translate(this.x, 0);
+    noStroke();
+    fill(150, 150, 150);
+    rect(0, 0, this.w, this.top); // Top pipe
+    rect(0, 568 - this.bottom, this.w, this.bottom); // Bottom pipe
+    fill(180, 180, 180);
+    rect(5, 0, 10, this.top); // Highlight on top pipe
+    rect(5, 568 - this.bottom, 10, this.bottom); // Highlight on bottom pipe
+    fill(100, 100, 100);
+    rect(this.w - 15, 0, 10, this.top); // Shadow on top pipe
+    rect(this.w - 15, 568 - this.bottom, 10, this.bottom); // Shadow on bottom pipe
+    pop();
+  }
+
+  update() {
+    this.x -= this.speed;
+  }
+
+  offscreen() {
+    return this.x < -this.w;
+  }
+
+  hits(bird) {
+    // Check vertical collision: bird's top edge above top pipe's bottom, or bird's bottom edge below bottom pipe's top
+    if (bird.y - bird.size / 2 < this.top || bird.y + bird.size / 2 > height - 32 - this.bottom) {
+      // Check horizontal collision: bird overlaps with the pipe's width
+      if (bird.x + bird.size / 2 > this.x && bird.x - bird.size / 2 < this.x + this.w) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  passes(bird) {
+    return bird.x > this.x + this.w;
+  }
+}
+</script>
+</body>
+</html>
