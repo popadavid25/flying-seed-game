@@ -177,9 +177,17 @@ function draw() {
     for (let pipe of pipes) {
       pipe.show(); // Keep pipes visible
     }
+    // Display the score above "Game Over!"
+    fill(255, 255, 0); // Yellow
+    stroke(0); // Black outline for readability
+    strokeWeight(2);
+    textSize(30); // Slightly smaller than "Game Over!"
+    textAlign(CENTER, CENTER);
+    text("Score: " + score, width / 2, height / 2 - 40); // Moved higher to avoid overlap
+    noStroke(); // Remove stroke for subsequent text
+    // Display "Game Over!" and restart prompt
     fill(255, 0, 0);
     textSize(40);
-    textAlign(CENTER, CENTER);
     text("Game Over!", width / 2, height / 2);
     textSize(20);
     text("Press Space to Restart", width / 2, height / 2 + 40);
@@ -273,8 +281,10 @@ class Bird {
 class Pipe {
   constructor() {
     this.spacing = 200;
-    this.top = random(height / 8, 2 / 3 * (height - 32));
-    this.bottom = (height - 32) - (this.top + this.spacing);
+    // Ensure the top pipe height allows the bottom pipe to have a non-negative height
+    const maxTopHeight = (height - 32) - this.spacing; // 568 - 200 = 368
+    this.top = random(height / 8, maxTopHeight); // Range: 75 to 368
+    this.bottom = (height - 32) - (this.top + this.spacing); // Will now always be >= 0
     this.x = width;
     this.w = 50;
     this.speed = 2;
@@ -289,7 +299,7 @@ class Pipe {
     noStroke();
     fill(150, 150, 150);
     rect(0, 0, this.w, this.top); // Top pipe
-    rect(0, 568 - this.bottom, this.w, this.bottom); // Bottom pipe
+    rect(0, 568 - this.bottom, this.w, this.bottom); // Bottom pipe, starts at y = 568 - this.bottom, extends to y = 568
     fill(180, 180, 180);
     rect(5, 0, 10, this.top); // Highlight on top pipe
     rect(5, 568 - this.bottom, 10, this.bottom); // Highlight on bottom pipe
